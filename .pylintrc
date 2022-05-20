@@ -1,0 +1,8 @@
+[MESSAGES CONTROL]
+disable=missing-module-docstring,
+    missing-function-docstring,
+    missing-class-docstring,
+    invalid-name,
+    import-error,
+    import-outside-toplevel,
+    no-member
