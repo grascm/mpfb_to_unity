@@ -33,6 +33,7 @@ class RigForUnity(Operator):
         armature = self._rig_with_mpfb(context.active_object)
         rigify_armature = self._convert_to_rigify(context, armature)
         self._fix_def_bones_hierarchy(context, rigify_armature)
+        self._disable_ik_stretching(rigify_armature)
 
         self._select_objects(context, [rigify_armature])
         return {"FINISHED"}
@@ -69,6 +70,12 @@ class RigForUnity(Operator):
                 self.report(
                     {"WARNING"}, f"Bone {bone.name} not processed correctly, reason: {str(e)}"
                 )
+
+    def _disable_ik_stretching(self, armature):
+        for bone in armature.pose.bones:
+            bone.ik_stretch = 0  # general blender property
+            if "IK_Stretch" in bone:
+                bone["IK_Stretch"] = 0.0  # custom rigify property
 
     def _create_armature(self, rigs_dir, basemesh):
         rig_file = os.path.join(rigs_dir, "standard", "rig.game_engine.json")
