@@ -30,9 +30,11 @@ class RigForUnity(Operator):
         return ObjectService.object_is_basemesh(context.active_object)
 
     def execute(self, context):
-        armature = self._rig_with_mpfb(context.active_object)
+        body_mesh = context.active_object
+        armature = self._rig_with_mpfb(body_mesh)
         rigify_armature = self._convert_to_rigify(context, armature)
         self._fix_def_bones_hierarchy(context, rigify_armature)
+        self._remove_unused_deform_bones(context, rigify_armature, body_mesh)
         self._disable_ik_stretching(rigify_armature)
 
         self._select_objects(context, [rigify_armature])
@@ -56,8 +58,8 @@ class RigForUnity(Operator):
 
     def _fix_def_bones_hierarchy(self, context, armature):
         self._edit_objects(context, [armature])
-        deform_bones = self._get_bones_for_layer(armature, DEF_LAYER)
-        root_bone = self._get_bones_for_layer(armature, ROOT_LAYER)[0]
+        deform_bones = self._get_bones_for_layer(armature.data.edit_bones, DEF_LAYER)
+        root_bone = self._get_bones_for_layer(armature.data.edit_bones, ROOT_LAYER)[0]
 
         for bone in deform_bones:
             if bone.parent == root_bone or bone.parent in deform_bones:
@@ -70,6 +72,24 @@ class RigForUnity(Operator):
                 self.report(
                     {"WARNING"}, f"Bone {bone.name} not processed correctly, reason: {str(e)}"
                 )
+
+    def _remove_unused_deform_bones(self, context, armature, mesh):
+        self._select_objects(context, [armature])
+        armature.data.layers = DEF_LAYER
+
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.armature.select_all(action="DESELECT")
+
+        bpy.ops.object.mode_set(mode="OBJECT")
+        deform_bones = self._get_bones_for_layer(armature.data.bones, DEF_LAYER)
+        for bone in deform_bones:
+            if bone.name not in mesh.vertex_groups:
+                bone.driver_remove("bbone_easein")
+                bone.driver_remove("bbone_easeout")
+                bone.parent.select_tail = True
+
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.armature.dissolve()
 
     def _disable_ik_stretching(self, armature):
         for bone in armature.pose.bones:
@@ -87,9 +107,9 @@ class RigForUnity(Operator):
         weights = self._load_json(weights_file)
         RigService.apply_weights(armature_object, basemesh, weights)
 
-    def _get_bones_for_layer(self, armature, layer_mask):
+    def _get_bones_for_layer(self, bones, layer_mask):
         res = []
-        for bone in armature.data.edit_bones:
+        for bone in bones:
             matches = map(
                 lambda layers: layers[0] == layers[1] or not layers[0], zip(layer_mask, bone.layers)
             )
