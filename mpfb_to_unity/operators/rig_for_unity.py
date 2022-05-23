@@ -36,6 +36,7 @@ class RigForUnity(Operator):
         self._fix_def_bones_hierarchy(context, rigify_armature)
         self._remove_unused_deform_bones(context, rigify_armature, body_mesh)
         self._disable_ik_stretching(rigify_armature)
+        self._disable_bones_bending(context, rigify_armature)
 
         self._select_objects(context, [rigify_armature])
         return {"FINISHED"}
@@ -96,6 +97,13 @@ class RigForUnity(Operator):
             bone.ik_stretch = 0  # general blender property
             if "IK_Stretch" in bone:
                 bone["IK_Stretch"] = 0.0  # custom rigify property
+
+    def _disable_bones_bending(self, context, armature):
+        self._select_objects(context, [armature])
+        for bone in armature.data.bones:
+            bone.driver_remove("bbone_easein")
+            bone.driver_remove("bbone_easeout")
+            bone.bbone_segments = 1
 
     def _create_armature(self, rigs_dir, basemesh):
         rig_file = os.path.join(rigs_dir, "standard", "rig.game_engine.json")
