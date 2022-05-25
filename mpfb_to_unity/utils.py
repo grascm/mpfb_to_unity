@@ -10,7 +10,8 @@ def edit_objects(context, obj_list):
 
 
 def select_objects(context, obj_list):
-    change_mode("OBJECT")
+    if context.active_object is not None:
+        change_mode("OBJECT")
     bpy.ops.object.select_all(action="DESELECT")
     for obj in obj_list:
         obj.select_set(True)
