@@ -10,7 +10,13 @@ from mpfb.services.rigifyhelpers.rigifyhelpers import RigifyHelpers
 from mpfb.services.rigservice import RigService
 from rigify.utils.layers import DEF_LAYER, ROOT_LAYER
 
-from mpfb_to_unity.utils import select_objects, edit_objects, load_json, change_mode_contextually
+from mpfb_to_unity.utils import (
+    select_objects,
+    edit_objects,
+    load_json,
+    change_mode_contextually,
+    change_armature_layers_contextually,
+)
 
 
 class RigForUnity(Operator):
@@ -77,20 +83,19 @@ class RigForUnity(Operator):
 
     def _remove_unused_deform_bones(self, context, armature, mesh):
         select_objects(context, [armature])
-        armature.data.layers = DEF_LAYER
+        with change_armature_layers_contextually(armature, DEF_LAYER):
+            with change_mode_contextually("EDIT"):
+                bpy.ops.armature.select_all(action="DESELECT")
 
-        with change_mode_contextually("EDIT"):
-            bpy.ops.armature.select_all(action="DESELECT")
+            deform_bones = self._get_bones_for_layer(armature.data.bones, DEF_LAYER)
+            for bone in deform_bones:
+                if bone.name not in mesh.vertex_groups:
+                    bone.driver_remove("bbone_easein")
+                    bone.driver_remove("bbone_easeout")
+                    bone.parent.select_tail = True
 
-        deform_bones = self._get_bones_for_layer(armature.data.bones, DEF_LAYER)
-        for bone in deform_bones:
-            if bone.name not in mesh.vertex_groups:
-                bone.driver_remove("bbone_easein")
-                bone.driver_remove("bbone_easeout")
-                bone.parent.select_tail = True
-
-        with change_mode_contextually("EDIT"):
-            bpy.ops.armature.dissolve()
+            with change_mode_contextually("EDIT"):
+                bpy.ops.armature.dissolve()
 
     def _disable_ik_stretching(self, armature):
         for bone in armature.pose.bones:

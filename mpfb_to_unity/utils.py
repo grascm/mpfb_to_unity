@@ -31,6 +31,16 @@ def change_mode_contextually(new_mode):
         change_mode(old_mode)
 
 
+@contextmanager
+def change_armature_layers_contextually(armature, new_layers):
+    old_layers = list(armature.data.layers)
+    armature.data.layers = new_layers
+    try:
+        yield
+    finally:
+        armature.data.layers = old_layers
+
+
 def load_json(filename):
     with open(filename, "r", encoding="utf-8") as json_file:
         return json.load(json_file)
