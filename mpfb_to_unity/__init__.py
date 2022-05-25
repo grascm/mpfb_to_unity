@@ -28,10 +28,10 @@ def unregister():
 
 
 def import_dependencies():
-    from .operators import ExportUnityFbx, RigForUnity
-    from .panels import RigForUnityPanel
+    from .operators import ExportUnityFbx, NewUnityHuman, RigForUnity
+    from .panels import NewUnityHumanPanel, RigForUnityPanel
 
-    return (ExportUnityFbx, RigForUnity, RigForUnityPanel)
+    return (ExportUnityFbx, NewUnityHuman, RigForUnity, NewUnityHumanPanel, RigForUnityPanel)
 
 
 def menu_func_export(self, context):

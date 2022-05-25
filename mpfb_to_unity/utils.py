@@ -1,4 +1,5 @@
 import json
+import os
 from contextlib import contextmanager
 
 import bpy
@@ -45,3 +46,7 @@ def change_armature_layers_contextually(armature, new_layers):
 def load_json(filename):
     with open(filename, "r", encoding="utf-8") as json_file:
         return json.load(json_file)
+
+
+def get_data_directory():
+    return os.path.join(os.path.dirname(__file__), "data")
