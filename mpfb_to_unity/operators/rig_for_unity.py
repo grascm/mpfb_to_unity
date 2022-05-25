@@ -1,4 +1,3 @@
-import json
 import os
 from functools import reduce
 
@@ -10,6 +9,8 @@ from mpfb.services.objectservice import ObjectService
 from mpfb.services.rigifyhelpers.rigifyhelpers import RigifyHelpers
 from mpfb.services.rigservice import RigService
 from rigify.utils.layers import DEF_LAYER, ROOT_LAYER
+
+from mpfb_to_unity.utils import select_objects, edit_objects, load_json, change_mode_contextually
 
 
 class RigForUnity(Operator):
@@ -38,7 +39,7 @@ class RigForUnity(Operator):
         self._disable_ik_stretching(rigify_armature)
         self._disable_bones_bending(context, rigify_armature)
 
-        self._select_objects(context, [rigify_armature])
+        select_objects(context, [rigify_armature])
         return {"FINISHED"}
 
     def _rig_with_mpfb(self, basemesh):
@@ -51,14 +52,14 @@ class RigForUnity(Operator):
         return armature_object
 
     def _convert_to_rigify(self, context, armature):
-        self._select_objects(context, [armature])
+        select_objects(context, [armature])
         bpy.ops.object.transform_apply(location=True, scale=False, rotation=False)
         rigify_helpers = RigifyHelpers.get_instance({"produce": True, "keep_meta": False})
         rigify_helpers.convert_to_rigify(armature)
         return context.active_object
 
     def _fix_def_bones_hierarchy(self, context, armature):
-        self._edit_objects(context, [armature])
+        edit_objects(context, [armature])
         deform_bones = self._get_bones_for_layer(armature.data.edit_bones, DEF_LAYER)
         root_bone = self._get_bones_for_layer(armature.data.edit_bones, ROOT_LAYER)[0]
 
@@ -75,13 +76,12 @@ class RigForUnity(Operator):
                 )
 
     def _remove_unused_deform_bones(self, context, armature, mesh):
-        self._select_objects(context, [armature])
+        select_objects(context, [armature])
         armature.data.layers = DEF_LAYER
 
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.armature.select_all(action="DESELECT")
+        with change_mode_contextually("EDIT"):
+            bpy.ops.armature.select_all(action="DESELECT")
 
-        bpy.ops.object.mode_set(mode="OBJECT")
         deform_bones = self._get_bones_for_layer(armature.data.bones, DEF_LAYER)
         for bone in deform_bones:
             if bone.name not in mesh.vertex_groups:
@@ -89,8 +89,8 @@ class RigForUnity(Operator):
                 bone.driver_remove("bbone_easeout")
                 bone.parent.select_tail = True
 
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.armature.dissolve()
+        with change_mode_contextually("EDIT"):
+            bpy.ops.armature.dissolve()
 
     def _disable_ik_stretching(self, armature):
         for bone in armature.pose.bones:
@@ -99,7 +99,7 @@ class RigForUnity(Operator):
                 bone["IK_Stretch"] = 0.0  # custom rigify property
 
     def _disable_bones_bending(self, context, armature):
-        self._select_objects(context, [armature])
+        select_objects(context, [armature])
         for bone in armature.data.bones:
             bone.driver_remove("bbone_easein")
             bone.driver_remove("bbone_easeout")
@@ -112,7 +112,7 @@ class RigForUnity(Operator):
 
     def _apply_wieghts(self, rigs_dir, armature_object, basemesh):
         weights_file = os.path.join(rigs_dir, "standard", "weights.game_engine.json")
-        weights = self._load_json(weights_file)
+        weights = load_json(weights_file)
         RigService.apply_weights(armature_object, basemesh, weights)
 
     def _get_bones_for_layer(self, bones, layer_mask):
@@ -139,21 +139,6 @@ class RigForUnity(Operator):
             bone.parent = root_bone
         else:
             bone.parent = next(filter(lambda b: b.name == full_parent_name, deform_bones))
-
-    def _edit_objects(self, context, obj_list):
-        self._select_objects(context, obj_list)
-        bpy.ops.object.mode_set(mode="EDIT")
-
-    def _select_objects(self, context, obj_list):
-        bpy.ops.object.mode_set(mode="OBJECT")
-        bpy.ops.object.select_all(action="DESELECT")
-        for obj in obj_list:
-            obj.select_set(True)
-            context.view_layer.objects.active = obj
-
-    def _load_json(self, filename):
-        with open(filename, "r", encoding="utf-8") as json_file:
-            return json.load(json_file)
 
     def _convert_org_name_to_def(self, org_name):
         name_parts = org_name.split("-")
