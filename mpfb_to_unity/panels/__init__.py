@@ -1,2 +1,2 @@
+from .convert_to_rigify import ConvertToRigifyPanel
 from .new_unity_human import NewUnityHumanPanel
-from .rig_for_unity import RigForUnityPanel
