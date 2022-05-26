@@ -44,6 +44,7 @@ class ConvertToRigify(Operator):
         return context.active_object
 
     def _fix_def_bones_hierarchy(self, armature):
+        _constraints_copy_queue = []
         with change_mode_contextually("EDIT"):
             deform_bones = self._get_bones_for_layer(armature.data.edit_bones, DEF_LAYER)
             root_bone = self._get_bones_for_layer(armature.data.edit_bones, ROOT_LAYER)[0]
@@ -53,12 +54,29 @@ class ConvertToRigify(Operator):
                     continue
 
                 try:
-                    self._update_parent_bone(bone, deform_bones, root_bone)
+                    name_parts = bone.name.split("-")
+                    self._ensure_bone_prefix(name_parts, "DEF")
+
+                    full_parent_name = self._convert_org_name_to_def(bone.parent.name)
+                    if full_parent_name == bone.name:
+                        # Some DEF bones parented to their ORG equivalent
+                        full_parent_name = self._convert_org_name_to_def(bone.parent.parent.name)
+                        _constraints_copy_queue.append((bone.parent.name, bone.name))
+
+                    print(f"{bone.name}: {bone.parent.name} -> {full_parent_name}")
+                    if full_parent_name == "DEF-Root":
+                        bone.parent = root_bone
+                    else:
+                        bone.parent = next(
+                            filter(lambda b: b.name == full_parent_name, deform_bones)
+                        )
                 except Exception as e:
                     print(f"Bone {bone.name} not processed correctly, reason: {str(e)}")
                     self.report(
                         {"WARNING"}, f"Bone {bone.name} not processed correctly, reason: {str(e)}"
                     )
+        for src_name, dst_name in _constraints_copy_queue:
+            self._copy_constraints(armature, src_name, dst_name)
 
     def _remove_unused_deform_bones(self, armature, mesh):
         with change_armature_layers_contextually(armature, DEF_LAYER):
@@ -97,21 +115,6 @@ class ConvertToRigify(Operator):
                 res.append(bone)
         return res
 
-    def _update_parent_bone(self, bone, deform_bones, root_bone):
-        name_parts = bone.name.split("-")
-        self._ensure_bone_prefix(name_parts, "DEF")
-
-        full_parent_name = self._convert_org_name_to_def(bone.parent.name)
-        if full_parent_name == bone.name:
-            # Some DEF bones parented to their ORG equivalent
-            full_parent_name = self._convert_org_name_to_def(bone.parent.parent.name)
-
-        print(f"{bone.name}: {bone.parent.name} -> {full_parent_name}")
-        if full_parent_name == "DEF-Root":
-            bone.parent = root_bone
-        else:
-            bone.parent = next(filter(lambda b: b.name == full_parent_name, deform_bones))
-
     def _ensure_bone_prefix(self, name_parts, expected_prefix):
         if name_parts[0] != expected_prefix:
             raise Exception(f"Bad bone prefix, excepted {expected_prefix}, got {name_parts[0]}")
@@ -121,6 +124,34 @@ class ConvertToRigify(Operator):
         self._ensure_bone_prefix(name_parts, "ORG")
         name_parts[0] = "DEF"
         return "-".join(name_parts)
+
+    def _copy_constraints(self, armature, src_name, dst_name):
+        src_bone = armature.pose.bones[src_name]
+        dst_bone = armature.pose.bones[dst_name]
+
+        for constraint in src_bone.constraints:
+            attributes = self._get_attributes_for_constraint_type(constraint.type) + [
+                "enabled",
+                "influence",
+                "owner_space",
+                "target_space",
+            ]
+            copy = dst_bone.constraints.new(constraint.type)
+            for attr in attributes:
+                setattr(copy, attr, getattr(constraint, attr))
+
+    def _get_attributes_for_constraint_type(self, t):
+        if t == "COPY_TRANSFORMS":
+            return [
+                "head_tail",
+                "mix_mode",
+                "remove_target_shear",
+                "subtarget",
+                "target",
+                "use_bbone_shape",
+            ]
+        else:
+            raise Exception(f"Unknown constraint type: {t}")
 
 
 class UnityRigifyHelpers(GameEngineRigifyHelpers):
