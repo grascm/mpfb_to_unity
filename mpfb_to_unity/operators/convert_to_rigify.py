@@ -1,16 +1,11 @@
-from functools import reduce
-
 import bpy
 from bpy.types import Operator
 from mpfb.services.objectservice import ObjectService
 from mpfb.services.rigifyhelpers.gameenginerigifyhelpers import GameEngineRigifyHelpers
 from mpfb.services.rigservice import RigService
-from rigify.utils.layers import DEF_LAYER, ROOT_LAYER
-from mpfb_to_unity.utils import (
-    change_armature_layers_contextually,
-    change_mode_contextually,
-    select_objects,
-)
+from mpfb_to_unity.utils import select_objects, change_mode_contextually
+
+from mpfb_to_unity.helpers import DeformBonesHierarchyHelper
 
 
 class ConvertToRigify(Operator):
@@ -31,8 +26,7 @@ class ConvertToRigify(Operator):
         rigify_armature = self._convert_to_rigify(context, armature)
 
         select_objects(context, [rigify_armature])
-        self._fix_def_bones_hierarchy(rigify_armature)
-        self._remove_unused_deform_bones(rigify_armature, basemesh)
+        self._simplify_bones_hierarchy(rigify_armature, basemesh)
         self._disable_ik_stretching(rigify_armature)
         self._disable_bones_bending(rigify_armature)
         return {"FINISHED"}
@@ -43,55 +37,13 @@ class ConvertToRigify(Operator):
         rigify_helpers.convert_to_rigify(armature)
         return context.active_object
 
-    def _fix_def_bones_hierarchy(self, armature):
-        _constraints_copy_queue = []
+    def _simplify_bones_hierarchy(self, armature, mesh):
         with change_mode_contextually("EDIT"):
-            deform_bones = self._get_bones_for_layer(armature.data.edit_bones, DEF_LAYER)
-            root_bone = self._get_bones_for_layer(armature.data.edit_bones, ROOT_LAYER)[0]
+            helper = DeformBonesHierarchyHelper(armature.data.edit_bones)
+            _constraints_copy_queue = helper.simplify_hierarchy(armature, mesh)
 
-            for bone in deform_bones:
-                if bone.parent == root_bone or bone.parent in deform_bones:
-                    continue
-
-                try:
-                    name_parts = bone.name.split("-")
-                    self._ensure_bone_prefix(name_parts, "DEF")
-
-                    full_parent_name = self._convert_org_name_to_def(bone.parent.name)
-                    if full_parent_name == bone.name:
-                        # Some DEF bones parented to their ORG equivalent
-                        full_parent_name = self._convert_org_name_to_def(bone.parent.parent.name)
-                        _constraints_copy_queue.append((bone.parent.name, bone.name))
-
-                    print(f"{bone.name}: {bone.parent.name} -> {full_parent_name}")
-                    if full_parent_name == "DEF-Root":
-                        bone.parent = root_bone
-                    else:
-                        bone.parent = next(
-                            filter(lambda b: b.name == full_parent_name, deform_bones)
-                        )
-                except Exception as e:
-                    print(f"Bone {bone.name} not processed correctly, reason: {str(e)}")
-                    self.report(
-                        {"WARNING"}, f"Bone {bone.name} not processed correctly, reason: {str(e)}"
-                    )
         for src_name, dst_name in _constraints_copy_queue:
             self._copy_constraints(armature, src_name, dst_name)
-
-    def _remove_unused_deform_bones(self, armature, mesh):
-        with change_armature_layers_contextually(armature, DEF_LAYER):
-            with change_mode_contextually("EDIT"):
-                bpy.ops.armature.select_all(action="DESELECT")
-
-            deform_bones = self._get_bones_for_layer(armature.data.bones, DEF_LAYER)
-            for bone in deform_bones:
-                if bone.name not in mesh.vertex_groups:
-                    bone.driver_remove("bbone_easein")
-                    bone.driver_remove("bbone_easeout")
-                    bone.parent.select_tail = True
-
-            with change_mode_contextually("EDIT"):
-                bpy.ops.armature.dissolve()
 
     def _disable_ik_stretching(self, armature):
         for bone in armature.pose.bones:
@@ -104,26 +56,6 @@ class ConvertToRigify(Operator):
             bone.driver_remove("bbone_easein")
             bone.driver_remove("bbone_easeout")
             bone.bbone_segments = 1
-
-    def _get_bones_for_layer(self, bones, layer_mask):
-        res = []
-        for bone in bones:
-            matches = map(
-                lambda layers: layers[0] == layers[1] or not layers[0], zip(layer_mask, bone.layers)
-            )
-            if reduce(lambda m1, m2: m1 and m2, matches):
-                res.append(bone)
-        return res
-
-    def _ensure_bone_prefix(self, name_parts, expected_prefix):
-        if name_parts[0] != expected_prefix:
-            raise Exception(f"Bad bone prefix, excepted {expected_prefix}, got {name_parts[0]}")
-
-    def _convert_org_name_to_def(self, org_name):
-        name_parts = org_name.split("-")
-        self._ensure_bone_prefix(name_parts, "ORG")
-        name_parts[0] = "DEF"
-        return "-".join(name_parts)
 
     def _copy_constraints(self, armature, src_name, dst_name):
         src_bone = armature.pose.bones[src_name]
