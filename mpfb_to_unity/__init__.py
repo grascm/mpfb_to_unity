@@ -28,15 +28,17 @@ def unregister():
 
 
 def import_dependencies():
-    from .operators import ExportUnityFbx, NewUnityHuman, ConvertToRigify
-    from .panels import NewUnityHumanPanel, ConvertToRigifyPanel
+    from .operators import ExportUnityFbx, NewUnityHuman, ConvertToRigify, BakeMeshForUnity
+    from .panels import NewUnityHumanPanel, ConvertToRigifyPanel, BakeMeshForUnityPanel
 
     return (
         ExportUnityFbx,
         NewUnityHuman,
         ConvertToRigify,
+        BakeMeshForUnity,
         NewUnityHumanPanel,
         ConvertToRigifyPanel,
+        BakeMeshForUnityPanel,
     )
 
 
