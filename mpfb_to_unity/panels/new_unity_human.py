@@ -13,5 +13,5 @@ class NewUnityHumanPanel(Panel):
     bl_parent_id = "MPFB_PT_New_Panel"
 
     def draw(self, context):
-        NEW_HUMAN_PROPERTIES.draw_properties(context.scene, self.layout, ["eyes_type"])
+        NEW_HUMAN_PROPERTIES.draw_properties(context.scene, self.layout, ["name", "eyes_type"])
         self.layout.operator("mtu.new_unity_human")

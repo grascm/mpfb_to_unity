@@ -19,6 +19,12 @@ def select_objects(context, obj_list):
         context.view_layer.objects.active = obj
 
 
+def rename_object(obj, name):
+    obj.name = name
+    if obj.data is not None:
+        obj.data.name = name
+
+
 def change_mode(new_mode):
     bpy.ops.object.mode_set(mode=new_mode, toggle=False)
 

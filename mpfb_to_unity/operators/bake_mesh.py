@@ -1,7 +1,7 @@
 import bpy
 from bpy.types import Operator
 from mpfb.services.objectservice import ObjectService
-from mpfb_to_unity.utils import select_objects, change_mode_contextually
+from mpfb_to_unity.utils import select_objects, change_mode_contextually, rename_object
 
 
 class BakeMeshForUnity(Operator):
@@ -14,21 +14,34 @@ class BakeMeshForUnity(Operator):
         return context.active_object and context.active_object.type == "ARMATURE"
 
     def execute(self, context):
+        name = context.active_object.name
         bpy.ops.object.select_hierarchy(direction="CHILD", extend=True)
         original_objects = context.selected_objects
+        self._rename_original_objects(original_objects)
+
         bpy.ops.object.duplicate()
         new_objects = context.selected_objects
+        self._rename_armature(new_objects, name)
 
         self._hide_objects(original_objects)
         self._apply_shape_keys(context, new_objects)
         self._remove_joints(context, new_objects)
-        mesh = self._merge_meshes(context, new_objects)
-        meshes = self._extract_helpers(context, mesh)
+        mesh = self._merge_meshes(context, new_objects, name)
+        meshes = self._extract_helpers(context, mesh, name)
         for mesh in meshes:
             self._remove_modifier(mesh, "Hide helpers")
             self._remove_empty_vertex_groups(mesh)
 
         return {"FINISHED"}
+
+    def _rename_original_objects(self, objects):
+        for obj in objects:
+            rename_object(obj, f"{obj.name}Original")
+
+    def _rename_armature(self, objects, name):
+        for obj in objects:
+            if obj.type == "ARMATURE":
+                rename_object(obj, name)
 
     def _hide_objects(self, objects):
         for obj in objects:
@@ -55,7 +68,7 @@ class BakeMeshForUnity(Operator):
             with change_mode_contextually("EDIT"):
                 bpy.ops.mesh.delete(type="VERT")
 
-    def _merge_meshes(self, context, objects):
+    def _merge_meshes(self, context, objects, name):
         meshes = []
         target_mesh = None
         for obj in objects:
@@ -66,15 +79,19 @@ class BakeMeshForUnity(Operator):
 
         select_objects(context, meshes + [target_mesh])
         bpy.ops.object.join()
+        rename_object(context.active_object, f"{name}Mesh")
         return context.active_object
 
-    def _extract_helpers(self, context, mesh):
+    def _extract_helpers(self, context, mesh, name):
         group_index = self._find_group_index(mesh, "HelperGeometry")
         vertecies = self._get_group_vertecies(mesh, group_index)
         self._select_vertecies(context, mesh, vertecies)
 
         with change_mode_contextually("EDIT"):
             bpy.ops.mesh.separate(type="SELECTED")
+        for obj in context.selected_objects:
+            if obj != mesh:
+                rename_object(obj, f"{name}Helpers")
         return context.selected_objects
 
     def _remove_empty_vertex_groups(self, mesh):

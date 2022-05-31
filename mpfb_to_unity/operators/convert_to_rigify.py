@@ -3,7 +3,7 @@ from bpy.types import Operator
 from mpfb.services.objectservice import ObjectService
 from mpfb.services.rigifyhelpers.gameenginerigifyhelpers import GameEngineRigifyHelpers
 from mpfb.services.rigservice import RigService
-from mpfb_to_unity.utils import select_objects, change_mode_contextually
+from mpfb_to_unity.utils import select_objects, change_mode_contextually, rename_object
 
 from mpfb_to_unity.helpers import DeformBonesHierarchyHelper
 
@@ -19,11 +19,13 @@ class ConvertToRigify(Operator):
 
     def execute(self, context):
         armature = context.active_object
+        name = armature.name
+        rename_object(armature, f"{name}Original")
         basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(
             context.active_object, "Basemesh"
         )
         select_objects(context, [armature])  # ensure it's the only object selected
-        rigify_armature = self._convert_to_rigify(context, armature)
+        rigify_armature = self._convert_to_rigify(context, armature, name)
 
         select_objects(context, [rigify_armature])
         self._simplify_bones_hierarchy(rigify_armature, basemesh)
@@ -31,10 +33,11 @@ class ConvertToRigify(Operator):
         self._disable_bones_bending(rigify_armature)
         return {"FINISHED"}
 
-    def _convert_to_rigify(self, context, armature):
+    def _convert_to_rigify(self, context, armature, name):
         bpy.ops.object.transform_apply(location=True, scale=False, rotation=False)
         rigify_helpers = UnityRigifyHelpers({"produce": True, "keep_meta": False})
         rigify_helpers.convert_to_rigify(armature)
+        rename_object(context.active_object, name)
         return context.active_object
 
     def _simplify_bones_hierarchy(self, armature, mesh):
