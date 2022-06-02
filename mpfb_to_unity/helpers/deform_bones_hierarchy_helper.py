@@ -48,12 +48,12 @@ class DeformBonesHierarchyHelper:
         with change_armature_layers_contextually(armature, DEF_LAYER):
             ArmatureOps.select_all(action="DESELECT")
 
-            deform_bones = _get_bones_for_layer(armature.data.bones, DEF_LAYER)
-            for bone in deform_bones:
-                if bone.name not in mesh.vertex_groups:
+            for edit_bone in self._deform_bones:
+                if edit_bone.name not in mesh.vertex_groups:
+                    bone = armature.data.bones[edit_bone.name]
                     bone.driver_remove("bbone_easein")
                     bone.driver_remove("bbone_easeout")
-                    bone.parent.select_tail = True
+                    edit_bone.parent.select_tail = True
 
             ArmatureOps.dissolve()
 
