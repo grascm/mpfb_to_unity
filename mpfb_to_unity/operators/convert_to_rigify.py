@@ -19,13 +19,11 @@ class ConvertToRigify(Operator):
 
     def execute(self, context):
         armature = context.active_object
-        name = armature.name
-        rename_object(armature, f"{name}Original")
         basemesh = ObjectService.find_object_of_type_amongst_nearest_relatives(
             context.active_object, "Basemesh"
         )
         select_objects(context, [armature])  # ensure it's the only object selected
-        rigify_armature = self._convert_to_rigify(context, armature, name)
+        rigify_armature = self._convert_to_rigify(context, armature, armature.name)
 
         select_objects(context, [rigify_armature])
         self._simplify_bones_hierarchy(rigify_armature, basemesh)
