@@ -58,6 +58,7 @@ class ExportUnityFbx(Operator, ExportHelper):
                 to_forward=_UNITY_AXIS_FORWARD,
                 to_up=_UNITY_AXIS_UP,
             ).to_4x4(),
+            "apply_scale_options": "FBX_SCALE_ALL",
             "axis_up": _UNITY_AXIS_UP,
             "axis_forward": _UNITY_AXIS_FORWARD,
             "bake_space_transform": True,
